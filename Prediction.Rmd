@@ -1,0 +1,134 @@
+---
+title: "Prediction Assignment Write-Up"
+author: "S Ridgway"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(caret)
+library(randomForest)
+set.seed(12231)
+
+```
+# Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+
+# Summary
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+In this project I will attempt to predict the manner in which participants performed barbell lifts. I will do this by training a classifier with the provided dataset.
+
+# Data Source
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+# Data Load and Pre-Processing
+```{r echo = TRUE}
+train = read.csv("pml-training.csv", header = TRUE, na.strings = c('NA', ''))
+test = read.csv("pml-testing.csv", header = TRUE, na.strings = c('NA', ''))
+
+```
+
+Having analysed the two data sets in R i have identified that there are 160 Columns of data in both the test and train data-set. I perform some pre-processing of the data below (based on my analysis outside of the report) which i think is important for our models.
+
+
+1) I clean our columns by removing ones that contain null data from both datasets 
+2) I then checked the columns for near zero-variance and removed them e.g. The value remains near constant for all observations and thus has no significance to our prediction.
+3) I finally remove the first 5 columns of our data which i have deemed of no relevance. (User names and Timestamp data)
+
+We have now reduced our datasets from 160 to 54 relevant columns.
+
+```{r echo = TRUE}
+### Check for Nulls and asign to na Variable
+na   <- colSums(is.na(train)) > 0
+
+### Remove nulls from train
+names <- colnames(train)
+cols  <- names[!na]
+train <- train[, cols]
+
+### Remove nulls from test
+names <- colnames(test)
+cols  <- names[!na]
+test  <- test[, cols]
+
+### Check for Zero Variance in columns and remove them from train and test datasets
+zvs   <- nearZeroVar(train)
+train <- train[, -zvs]
+test  <- test[, -zvs]
+
+### Remove the first 5 columns
+train <- train[, 6:ncol(train)]
+test  <- test[, 6:ncol(test)]
+```
+
+
+Finally, i have split our refined data into 2 parts (80/20) for training cross validation. 
+
+```{r echo = TRUE}
+
+### Split the training data 80/20
+partition <- createDataPartition(y = train$classe, p = 0.8, list = FALSE)
+train_partition   <- train[partition, ]
+validation_partition  <- train[-partition, ]
+```
+
+
+# Training
+
+After some exploration and testing i decided to use a *Random Forest* prediction model due to the number of predictors used and the accuracy demonstrated on our test data. 
+
+I have trained the model on the 80% partition of the training data above and used cross validation to test our accuracy which we can see below is *99.7%* using our optimal model, with an out of error rate of *0.003*. This is highly accurate and appropriate to move forward with.
+
+```{r ech = TRUE}
+
+### Perform cross validation on the 80% Training partition
+control <- trainControl(method = "cv", number = 5)
+rf_model <- train(classe ~ ., data = train_partition, method = "rf", trControl = control)
+print(rf_model, digits = 4)
+```
+
+
+
+# Training test and Confusion Matrix results
+
+Next i use our optimized model above to test against the 20% cut of the training data to see how accurate we actually are on unknown data. To analyse the rersults i have computed a confusion matrix to look at the sensitivity and specificity.
+
+As expected, the results are highly accurate at *99.8%*  with only a small number of miss diagnosed results present. This is a desirable outcome for any model.
+
+```{r echo = TRUE}
+
+### apply our trained model onto the 20% training data (i named it validation partition)
+validation <- predict(rf_model, validation_partition)
+confusionMatrix(validation, as.factor(validation_partition$classe))
+
+```
+
+
+# Final Model / Test Predictions
+
+Finally, i have applied our tuned model onto the testing data that we initially loaded. This gives out the final predictions for the 'Classe; variable that we will submit.
+
+```{r echo = TRUE}
+### run our model on our final test data to obtain the Classe predictions we require.
+prediction<- predict(rf_model, test)
+### Display our final predictions
+print(cbind(test[54],prediction))
+```
+
+
+
+
+
